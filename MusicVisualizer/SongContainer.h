@@ -45,13 +45,16 @@ private:
 	float nextBeatTime;
 	bool beatNotInitialized;
 
-	/*
-	for debugging
+	
+	//for debugging
 	int idx;
 	float debuggingRMS[600];
 	ofstream myfile;
+	ofstream beatFile;
 	bool fileNotClosed;
-	*/
+	int beatIdx;
+	float lastPrintedBeat;
+	
 
 	// variables for FFT
 	int bufferSize;
@@ -66,4 +69,7 @@ private:
 	int nFreqBins;
 	int nFFTBinsInPillar;
 	TArray<ARectangularPrism*> Pillars;
+	TArray<ARectangularPrism*> Floor;
+
+	bool thisBeatVisualized;
 };

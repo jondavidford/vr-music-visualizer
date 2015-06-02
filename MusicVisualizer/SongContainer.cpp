@@ -19,6 +19,8 @@ ASongContainer::ASongContainer()
 	lastBeatTime(0),
 	nextBeatTime(0),
 	beatNotInitialized(true),
+	thisBeatVisualized(false),
+	lastPrintedBeat(0),
 	rmsThreshold(10000)
 {
 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
@@ -28,7 +30,8 @@ ASongContainer::ASongContainer()
 	{
 		ConstructorHelpers::FObjectFinder<USoundWave> Sound;
 		FConstructorStatics()
-			: Sound(TEXT("/Game/We_Will_Rock_You.We_Will_Rock_You"))
+			: //Sound(TEXT("/Game/Cheers_Elephant_-_Leaves.Cheers_Elephant_-_Leaves"))
+			Sound(TEXT("/Game/We_Will_Rock_You.We_Will_Rock_You"))
 		{
 		}
 	};
@@ -55,17 +58,20 @@ ASongContainer::ASongContainer()
 	p.Init(0, nPeriods);
 	if (World)
 	{
+		// initialize Floor
+		Floor.Add(World->SpawnActor<ARectangularPrism>(ARectangularPrism::StaticClass(), FVector(-500, -500, 100), FRotator(0, 0, 0)));
 		// initialize Pillars
 		for (int i = 0; i < nFreqBins; i++)
 			Pillars.Add(World->SpawnActor<ARectangularPrism>(ARectangularPrism::StaticClass(), FVector(210 * i, 100, 100), FRotator(0,0,0)));
 	}
 
-	/*
-	for debugging
+	
+	//for debugging
 	myfile.open("C:\\Users\\Jon\\rms.txt", ios::out);
+	beatFile.open("C:\\Users\\Jon\\beat.txt", ios::out);
 	fileNotClosed = true;
 	idx = 0;
-	*/
+	beatIdx = 0;
 }
 
 // Called when the game starts or when spawned
@@ -75,7 +81,7 @@ void ASongContainer::BeginPlay()
 
 	Song->SetSound(Sound);
 	Song->Play(0);
-
+	currentTime = 0;
 }
 
 // Called every frame
@@ -109,19 +115,9 @@ void ASongContainer::Tick(float DeltaTime)
 	}
 	float rms = sqrt(squaredSum / nSamples);
 	
-	/*
-	print out rms data so we know where to set the threshold
-	if (idx < 1200)
-	{
-		myfile << rms << endl;
-		idx++;
-	}
-	else if (fileNotClosed)
-	{
-		myfile.close();
-		fileNotClosed = false;
-	}
-	*/
+	
+	//print out rms data so we know where to set the threshold
+	myfile << rms << "\t" << currentTime << endl;
 
 	// ===================
 	// simple beat tracker
@@ -133,45 +129,47 @@ void ASongContainer::Tick(float DeltaTime)
 	const float k = 1;
 	const float e = 0.3;
 	const float timeToDisplayBeat = 0.1;
+
+	// get the first two beats
 	if (rms > rmsThreshold)
 	{
-		if (nextBeatTime)
-		{
-			d = (currentTime - nextBeatTime) / p[0];
-			if (abs(d) < e)
-			{
-				pSum = 0;
-				weightSum = 0;
-				for (int i = 0; i < nPeriods; i++)
-				{
-					const float weight = pow(m, i);
-					pSum += p[i] * weight;
-					float bleh = p[i];
-					weightSum += weight;
-				}
-				p_i = (pSum / weightSum) * (1 + k*d);
-				p.RemoveAt(nPeriods - 1);
-				p.Push(p_i);
-
-				nextBeatTime = lastBeatTime + p[0];
-			}
-			else if (currentTime > nextBeatTime)
-			{
-				float bleh = p[0];
-				nextBeatTime = lastBeatTime + p[0];
-			}
-		}
-
 		if (lastBeatTime && beatNotInitialized)
 		{
 			p[0] = currentTime - lastBeatTime;
 			nextBeatTime = currentTime + p[0];
 			beatNotInitialized = false;
 		}
-		
+
 		lastBeatTime = currentTime;
 	}
 
+	// calculation of beat period according to Pardo 2004 paper
+	if (nextBeatTime)
+	{
+		d = (currentTime - nextBeatTime) / p[0];
+		if (abs(d) < e && rms > rmsThreshold)
+		{
+			pSum = 0;
+			weightSum = 0;
+			for (int i = 0; i < nPeriods; i++)
+			{
+				const float weight = pow(m, i);
+				pSum += p[i] * weight;
+				float bleh = p[i];
+				weightSum += weight;
+			}
+			p_i = (pSum / weightSum) * (1 + k*d);
+			p.RemoveAt(nPeriods - 1);
+			p.Push(p_i);
+
+			nextBeatTime = lastBeatTime + p[0];
+		}
+		else if (currentTime > nextBeatTime && rms < rmsThreshold)
+		{
+			nextBeatTime = lastBeatTime + p[0];
+		}
+
+	}
 
 	// execute the fft
 	fftw_execute(plan);
@@ -206,12 +204,23 @@ void ASongContainer::Tick(float DeltaTime)
 	if (abs(currentTime - nextBeatTime) < timeToDisplayBeat)
 	{
 		// beat has occurred
-		//Cubes[0]->SetActorScale3D(FVector(1, 1, 2));
+		Floor[0]->SetActorScale3D(FVector(1, 1, 2));
+		if (beatIdx < 20 && lastPrintedBeat != nextBeatTime)
+		{
+			lastPrintedBeat = nextBeatTime;
+			beatFile << nextBeatTime << endl;
+			beatIdx++;
+		}
+		else if (beatIdx >= 20)
+		{
+			myfile.close();
+			beatFile.close();
+		}
 	}
 	else
 	{
 		// beat has not occurred
-		//Cubes[0]->SetActorScale3D(FVector(1, 1, 1));
+		Floor[0]->SetActorScale3D(FVector(1, 1, 1));
 	}
 
 	currentTime += DeltaTime;

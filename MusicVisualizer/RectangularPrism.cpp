@@ -13,7 +13,7 @@ ARectangularPrism::ARectangularPrism(const FObjectInitializer& ObjectInitializer
 	Prism = ObjectInitializer.CreateDefaultSubobject<UStaticMeshComponent>(this, TEXT("CubeMesh"));
 	//
 
-	static ConstructorHelpers::FObjectFinder <UStaticMesh>StaticMesh(TEXT("/Game/Box_Brush_StaticMesh.Box_Brush_StaticMesh"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh>StaticMesh(TEXT("/Game/Box_Brush_StaticMesh.Box_Brush_StaticMesh"));
 	static ConstructorHelpers::FObjectFinder<UMaterial> Material(TEXT("/Game/NewMaterial.NewMaterial"));
 
 	Prism->SetMobility(EComponentMobility::Movable);
