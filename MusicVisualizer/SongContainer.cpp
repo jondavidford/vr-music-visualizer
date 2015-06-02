@@ -13,9 +13,9 @@ ASongContainer::ASongContainer()
 	: currentTime(0),
 	bufferSize(1024),
 	maxIntensity(0),
+	nFreqBins(15),
 	pMin(0.2),
 	nPeriods(20),
-	idx(0),
 	lastBeatTime(0),
 	nextBeatTime(0),
 	beatNotInitialized(true),
@@ -39,10 +39,14 @@ ASongContainer::ASongContainer()
 	Song = (UAudioComponent*) UAudioComponent::StaticClass()->GetDefaultObject();
 	AudioExtractor = (UPCMAudioExtractor*)UPCMAudioExtractor::StaticClass()->GetDefaultObject();
 	Buffer.AddZeroed(bufferSize);
+
+	// nOutputBins as defined by the definition of an fft
+	nOutputBins = bufferSize / 2 + 1;
+	nFFTBinsInPillar = nOutputBins / nFreqBins;
 	
 	// create fft plans
 	in = (double*) malloc(sizeof(double) * bufferSize);
-	out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * (bufferSize/2 + 1));
+	out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nOutputBins);
 	plan = fftw_plan_dft_r2c_1d(bufferSize, in, out, FFTW_MEASURE);
 
 	// create children actors (the cubes)
@@ -51,12 +55,17 @@ ASongContainer::ASongContainer()
 	p.Init(0, nPeriods);
 	if (World)
 	{
-		//for (int i = 0; i < (bufferSize / 2 + 1); i++)
-		Cubes[0] = World->SpawnActor<ARectangularPrism>(ARectangularPrism::StaticClass(), FVector(210 * 0, 100, 100), FRotator(0,0,0));
+		// initialize Pillars
+		for (int i = 0; i < nFreqBins; i++)
+			Pillars.Add(World->SpawnActor<ARectangularPrism>(ARectangularPrism::StaticClass(), FVector(210 * i, 100, 100), FRotator(0,0,0)));
 	}
+
+	/*
+	for debugging
 	myfile.open("C:\\Users\\Jon\\rms.txt", ios::out);
 	fileNotClosed = true;
 	idx = 0;
+	*/
 }
 
 // Called when the game starts or when spawned
@@ -82,7 +91,7 @@ void ASongContainer::Tick(float DeltaTime)
 	AudioExtractor->GetAmplitude(Sound, 0, currentTime, DeltaTime, nSamplesInFrame, Buffer);
 
 	// copy elements into fft buffer
-	// also calculate rms
+	// calculate rms
 	float squaredSum = 0;
 	float nSamples = 0;
 	for (int i = 0; i < bufferSize; ++i)
@@ -100,6 +109,8 @@ void ASongContainer::Tick(float DeltaTime)
 	}
 	float rms = sqrt(squaredSum / nSamples);
 	
+	/*
+	print out rms data so we know where to set the threshold
 	if (idx < 1200)
 	{
 		myfile << rms << endl;
@@ -110,10 +121,12 @@ void ASongContainer::Tick(float DeltaTime)
 		myfile.close();
 		fileNotClosed = false;
 	}
+	*/
 
 	// ===================
 	// simple beat tracker
 	// ===================
+	//
 	// onset determined by rms
 	float d, p_i, pSum, weightSum;
 	const float m = 0.95;
@@ -159,24 +172,46 @@ void ASongContainer::Tick(float DeltaTime)
 		lastBeatTime = currentTime;
 	}
 
+
+	// execute the fft
 	fftw_execute(plan);
 
+	// get magnitudes
+	double magTot = 0;
+	int nTot = 0;
+	int pillarIdx = 0;
 	for (int i = 0; i < (bufferSize / 2 + 1); i++)
 	{
 		double real = out[i][0];
 		double imag = out[i][1];
 		double mag = sqrt((real * real) + (imag * imag));
+		
+		magTot += mag;
+		nTot += 1;
 
+		// if we have summed up all the bins for this pillar
+		// or we are on the last pillar
+		if (nTot == nFFTBinsInPillar)
+		{
+			Pillars[pillarIdx]->SetActorScale3D(FVector(1, 1, magTot / 100000));
+			
+			magTot = 0;
+			nTot = 0;
+			pillarIdx += 1;
+		}
 		//Cubes[i]->SetActorScale3D(FVector(1, 1, mag / 1000.0));
 	}
 
+	// determine if a beat is currently happening
 	if (abs(currentTime - nextBeatTime) < timeToDisplayBeat)
 	{
-		Cubes[0]->SetActorScale3D(FVector(1, 1, 2));
+		// beat has occurred
+		//Cubes[0]->SetActorScale3D(FVector(1, 1, 2));
 	}
 	else
 	{
-		Cubes[0]->SetActorScale3D(FVector(1, 1, 1));
+		// beat has not occurred
+		//Cubes[0]->SetActorScale3D(FVector(1, 1, 1));
 	}
 
 	currentTime += DeltaTime;

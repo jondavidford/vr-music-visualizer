@@ -29,33 +29,41 @@ public:
 	virtual void Tick( float DeltaSeconds ) override;
 
 private:
+	// variables for getting audio samples
 	UAudioComponent* Song;
 	USoundWave* Sound;
 	UPCMAudioExtractor* AudioExtractor;
 
+	// variables for beat tracker
 	float currentTime;
 	int nPeriods;
 	int iP;
 	TArray<float> p;
-	int idx;
-	float debuggingRMS[600];
 	float pMin;
 	float rmsThreshold;
 	float lastBeatTime;
 	float nextBeatTime;
 	bool beatNotInitialized;
 
+	/*
+	for debugging
+	int idx;
+	float debuggingRMS[600];
 	ofstream myfile;
 	bool fileNotClosed;
+	*/
 
-
+	// variables for FFT
 	int bufferSize;
+	int nOutputBins;
 	TArray<float> Buffer;
-
 	double *in;
 	fftw_complex *out;
 	fftw_plan plan;
 	double maxIntensity;
 
-	ARectangularPrism* Cubes[1024];
+	// visualization elements
+	int nFreqBins;
+	int nFFTBinsInPillar;
+	TArray<ARectangularPrism*> Pillars;
 };
